@@ -171,7 +171,11 @@ app.use(
 
 
 
+
+
 app.use("/nifti", express.static(path.join(__dirname, "nifti")));
+
+
 
 // Start server
 app.listen(port, () => {
