@@ -5,18 +5,29 @@ import cors from 'cors';
 
 import sessionRoutes from './routes/sessionRoutes';
 import annotationRoutes from './routes/annotationRoutes';
-import { setupSwagger } from './swagger'; // 👈 import
+import { setupSwagger } from './swagger';
 
 dotenv.config();
-const app = express();
+const app = express();  
 
-app.use(cors());
+// ✅ Set allowed origin (your frontend domain)
+const corsOptions = {
+  origin: [
+    'http://localhost:3006',
+    'https://dicomviewer.digitalclinics.ai',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 app.use('/api/session', sessionRoutes);
 app.use('/api/annotation', annotationRoutes);
 
-setupSwagger(app); // 👈 enable Swagger at /api-docs
+setupSwagger(app); // Swagger at /api-docs
 
 mongoose.connect(process.env.MONGO_URI!)
   .then(() => {
