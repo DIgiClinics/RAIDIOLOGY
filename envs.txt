@@ -1,0 +1,16 @@
+NEXT_PUBLIC_DATA_SERVER="http://localhost:8003"
+NEXT_PUBLIC_SERVER_URL="http://localhost:5005"
+NEXT_PUBLIC_FLASK_URL="http://localhost:5006"
+NEXT_PUBLIC_DEPLOYMENT="http://localhost:8003"
+
+
+
+REACT_APP_DataServer="http://localhost:8003"
+REACT_APP_ServerUrl="http://localhost:5005"
+REACT_APP_FLASK_URL="http://localhost:5006"
+REACT_APP_Deployment="http://localhost:8003"
+PORT=3005
+
+PORT =5005
+MONGO_URI ="mongodb+srv://devikadigiclinics:9LdisGIodMgzasax@cluster0.dvkn5nm.mongodb.net/YantraLabs"
+FRONTEND_URL="http://183.82.46.35:3005"
