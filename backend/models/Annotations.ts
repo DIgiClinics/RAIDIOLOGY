@@ -1,11 +1,17 @@
 import mongoose from 'mongoose';
 
-const AnnotationSchema = new mongoose.Schema({
-  sessionId: String,
-  fileURL: String,
-  doctorName: String,
-  data: Object,
-  createdAt: { type: Date, default: Date.now }
-});
+const AnnotationEntrySchema = new mongoose.Schema({
+  fileURL: { type: String, required: true },
+  data: { type: Object, required: true }
+}, { _id: false });
 
-export default mongoose.model("Annotation", AnnotationSchema);
+const AnnotationSchema = new mongoose.Schema(
+  {
+    sessionId: { type: String, required: true, unique: true },
+    doctorName: { type: String, required: true },
+    annotations: { type: [AnnotationEntrySchema], default: [] }
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model<any>('Annotation', AnnotationSchema);

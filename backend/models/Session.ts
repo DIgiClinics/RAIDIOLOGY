@@ -23,6 +23,7 @@ export interface SessionDocument extends Document {
   ip: string;
   userAgent: string;
   ended: boolean;
+  niftyFileNames: string[]; // ✅ Changed to array
 }
 
 const FileEntrySchema = new Schema<FileEntry>(
@@ -51,7 +52,8 @@ const SessionSchema = new Schema<SessionDocument>(
     totalDuration: { type: Number, default: 0 },
     ip: { type: String },
     userAgent: { type: String },
-    ended: { type: Boolean, default: false }
+    ended: { type: Boolean, default: false },
+    niftyFileNames: { type: [String], default: [] } // ✅ New field as array
   },
   { timestamps: true }
 );

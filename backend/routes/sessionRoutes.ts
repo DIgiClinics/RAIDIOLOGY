@@ -1,20 +1,19 @@
 import { Router } from 'express';
-import { startSession, updateSession, endSession ,getFileURLsBySessionId} from '../controllers/sessionController';
+import {
+  startSession,
+  updateSession,
+  endSession,
+  getFileURLsBySessionId,
+  getSessionMetadata
+} from '../controllers/sessionController';
 
 const router = Router();
 
 /**
  * @swagger
- * tags:
- *   name: Session
- *   description: Patient session management
- */
-
-/**
- * @swagger
  * /api/session/start:
  *   post:
- *     summary: Start a new patient session
+ *     summary: Start a new session and convert DICOM to NIfTI via Flask
  *     tags: [Session]
  *     requestBody:
  *       required: true
@@ -25,9 +24,12 @@ const router = Router();
  *             required:
  *               - mrn
  *               - patientName
+ *               - age
+ *               - gender
  *               - consultingDoctor
  *               - symptoms
  *               - admissionDate
+ *               - files
  *             properties:
  *               mrn:
  *                 type: string
@@ -60,17 +62,10 @@ const router = Router();
  *                     remarks:
  *                       type: string
  *     responses:
- *       201:
- *         description: Session created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 sessionId:
- *                   type: string
- *       400:
- *         description: Missing required fields
+ *       200:
+ *         description: Session started and NIfTI file created
+ *       500:
+ *         description: Internal server error
  */
 router.post('/start', startSession);
 
@@ -78,7 +73,7 @@ router.post('/start', startSession);
  * @swagger
  * /api/session/update:
  *   post:
- *     summary: Update session's last activity and duration
+ *     summary: Update session activity and duration
  *     tags: [Session]
  *     requestBody:
  *       required: true
@@ -95,9 +90,11 @@ router.post('/start', startSession);
  *       200:
  *         description: Session updated
  *       400:
- *         description: Missing parameters
+ *         description: Missing sessionId
  *       404:
  *         description: Session not found
+ *       500:
+ *         description: Internal server error
  */
 router.post('/update', updateSession);
 
@@ -122,43 +119,63 @@ router.post('/update', updateSession);
  *       200:
  *         description: Session ended
  *       400:
- *         description: sessionId required
+ *         description: Missing sessionId
  *       404:
  *         description: Session not found
+ *       500:
+ *         description: Internal server error
  */
 router.post('/end', endSession);
-
 
 /**
  * @swagger
  * /api/session/files/{sessionId}:
  *   get:
- *     summary: Get all file URLs for a session
+ *     summary: Get all file URLs for a specific session
  *     tags: [Session]
  *     parameters:
  *       - in: path
  *         name: sessionId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
- *         description: The session ID
+ *         description: ID of the session
  *     responses:
  *       200:
- *         description: List of file URLs
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 fileURLs:
- *                   type: array
- *                   items:
- *                     type: string
+ *         description: File URLs returned
  *       400:
- *         description: sessionId is required
+ *         description: Missing sessionId
  *       404:
  *         description: Session not found
+ *       500:
+ *         description: Internal server error
  */
 router.get('/files/:sessionId', getFileURLsBySessionId);
+
+/**
+ * @swagger
+ * /api/session/metadata/{sessionId}:
+ *   get:
+ *     summary: Get session metadata excluding files, include NIfTI file names
+ *     tags: [Session]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Session ID
+ *     responses:
+ *       200:
+ *         description: Session metadata returned
+ *       400:
+ *         description: Missing sessionId
+ *       404:
+ *         description: Session not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/metadata/:sessionId', getSessionMetadata);
+
 
 export default router;

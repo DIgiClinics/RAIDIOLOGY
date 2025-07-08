@@ -14,6 +14,7 @@ const app = express();
 const corsOptions = {
   origin: [
     'http://localhost:3006',
+    'http://localhost:3005',
     'https://dicomviewer.digitalclinics.ai',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],

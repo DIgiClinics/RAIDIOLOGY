@@ -6,12 +6,10 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 
 const Dcmvi = dynamic(() => import('../../../components/Viewer'), { ssr: false });
-const PapayaViewer = dynamic(() => import('../../../components/PapayaViewer'), { ssr: false });
+const MprViewer = dynamic(() => import('../../../components/MprViewer'), { ssr: false });
 
 export default function ViewerPage() {
-    const { sessionId } = useParams() as {
-        sessionId: string;
-    };
+    
 
     const searchParams = useSearchParams();
     const modeParam = searchParams?.get('mode');
@@ -53,7 +51,7 @@ export default function ViewerPage() {
             {/* Viewer Section */}
             <div className="flex-1 overflow-auto">
                 {viewMode === '2D' && <Dcmvi />}
-                {viewMode === 'MPR' && niftyName && <PapayaViewer />}
+                {viewMode === 'MPR' &&  <MprViewer />}
             </div>
         </div>
     );

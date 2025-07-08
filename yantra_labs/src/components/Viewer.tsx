@@ -19,8 +19,12 @@ import { useParams, useRouter } from "next/navigation"; // Next.js hooks
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-scroll";
 import DClogo from "./vercel.svg"; // Assuming DGLogo.svg is in the parent directory
-
+import {
+    getEnabledElement,
+} from '@cornerstonejs/core';
 // Define types for environment variables for safety
+
+import { annotation, utilities as csUtils } from '@cornerstonejs/tools';
 interface ProcessEnv {
     NEXT_PUBLIC_DATA_SERVER: string;
     NEXT_PUBLIC_FLASK_URL: string;
@@ -92,6 +96,19 @@ const Viewer: React.FC<ViewerProps> = () => {
     const params = useParams();
     const { sessionId } = params as { sessionId: string };
 
+    useEffect(() => {
+        cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+
+        cornerstoneWADOImageLoader.webWorkerManager.initialize({
+            webWorkerPath: '/cornerstoneWADOImageLoaderWebWorker.js', // ✅ Adjust path
+            taskConfiguration: {
+                decodeTask: {
+                    codecsPath: '/cornerstoneWADOImageLoaderCodecs.js' // ✅ Adjust path
+                }
+            }
+        });
+    }, []);
+
     // Environment variables for Next.js must be prefixed with NEXT_PUBLIC_
     const baseUrl = (process.env as unknown as ProcessEnv).NEXT_PUBLIC_DATA_SERVER;
     const flaskURL = (process.env as unknown as ProcessEnv).NEXT_PUBLIC_FLASK_URL;
@@ -132,10 +149,11 @@ const Viewer: React.FC<ViewerProps> = () => {
                     const response = await axios.get(`${serverURL}/api/session/files/${sessionId}`);
                     const fileURLs: string[] = response.data.fileURLs;
 
-                    const fileObjects = fileURLs.map((url, i) => ({
-                        name: `image-${i + 1}.dcm`,
-                        fileURL: url
-                    }));
+                    const fileObjects = fileURLs.map((url) => {
+                        const name = url.split("/").pop() || "unnamed.dcm";
+                        return { name, fileURL: url };
+                    });
+
 
                     setImageFiles(fileObjects);
                 } catch (error) {
@@ -150,15 +168,13 @@ const Viewer: React.FC<ViewerProps> = () => {
     }, [sessionId, serverURL]);
 
 
-
-
-
     const initialize2DViewer = async () => {
-        if (!viewerRef.current || !sessionId || !imageFiles.length) return;
+        if (!viewerRef.current || !sessionId || imageFiles.length === 0) return;
 
         const element = viewerRef.current;
         cornerstone.enable(element);
 
+        // Tool setup
         const tools = [
             'StackScrollMouseWheel', 'Pan', 'Zoom', 'Length', 'Probe', 'Angle', 'Eraser',
             'FreehandRoi', 'EllipticalRoi', 'Magnify', 'Rotate', 'Wwwc', 'RectangleRoi'
@@ -168,54 +184,33 @@ const Viewer: React.FC<ViewerProps> = () => {
             if (tool) cornerstoneTools.addTool(tool);
         });
 
-        if (imageBlobsRef.current) {
-            loadImagesFromBlobs(imageBlobsRef.current);
-        } else {
-            fetchAndLoadImages();
-        }
+        // ⛔️ Removed blob condition — load directly from S3 URLs
+        await fetchAndLoadImages(); // This now directly sets `wadouri:` imageIds
     };
 
     const fetchAndLoadImages = async () => {
+        console.log("▶️ fetchAndLoadImages called");
+
         setTotalImages(imageFiles.length);
-        const fetchedBlobs = new Array(imageFiles.length);
-        let firstImageLoaded = false;
-
-        imageFiles.forEach((file, index) => {
-            const fileUrl = file.fileURL;  // Use direct fileURL now
-            fetch(fileUrl)
-                .then(response => {
-                    if (!response.ok) throw new Error(`Failed to fetch file: ${fileUrl}`);
-                    return response.blob();
-                })
-                .then(blob => {
-                    fetchedBlobs[index] = blob;
-                    const imageId = cornerstoneWADOImageLoader.wadouri.fileManager.add(blob);
-                    imagesLOL.current[index] = imageId;
-
-                    if (!firstImageLoaded) {
-                        setImageLoaded(true);
-                        updateTheImage(index);
-                        firstImageLoaded = true;
-                    }
-                })
-                .catch(e => console.error("Error fetching individual image:", e));
+        imagesLOL.current = imageFiles.map(file => {
+            const id = `wadouri:${file.fileURL}`;
+            console.log("📸 Image ID:", id);
+            return id;
         });
 
-        imageBlobsRef.current = fetchedBlobs;
-    };
-
-
-    const loadImagesFromBlobs = async (blobs: Blob[]) => {
-        cornerstoneWADOImageLoader.wadouri.fileManager.purge();
-        imagesLOL.current = blobs.map(blob => cornerstoneWADOImageLoader.wadouri.fileManager.add(blob));
-        setTotalImages(imagesLOL.current.length);
-        setImageLoaded(true);
-        updateTheImage(currentIndexRef.current);
+        if (imagesLOL.current.length > 0) {
+            setImageLoaded(true);
+            console.log("✅ Images mapped, loading first one...");
+            updateTheImage(0); // Display first image
+        } else {
+            console.warn("⚠️ No images found to load.");
+        }
     };
 
     useEffect(() => {
         if (imageFiles.length > 0) {
             initialize2DViewer();
+            loadAnnotations();
         } else {
             if (viewerRef.current) {
                 try { cornerstone.disable(viewerRef.current); } catch (e) { /* silent fail */ }
@@ -226,6 +221,7 @@ const Viewer: React.FC<ViewerProps> = () => {
                 try { cornerstone.disable(viewerRef.current); } catch (e) { /* silent fail */ }
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionId, imageFiles]);
 
     useEffect(() => {
@@ -255,25 +251,51 @@ const Viewer: React.FC<ViewerProps> = () => {
         };
     }, [activeTool, imageLoaded]);
 
-    const updateTheImage = async (index: number) => {
-        if (!imagesLOL.current[index] || !viewerRef.current) return;
-        try {
-            const image = await cornerstone.loadImage(imagesLOL.current[index]);
-            const element = viewerRef.current;
-            if (!element) return;
-            const viewport = cornerstone.getDefaultViewportForImage(element, image);
-            cornerstone.displayImage(element, image, viewport);
+
+    const updateTheImage = (index: number) => {
+        const element = viewerRef.current;
+        if (!element) return;
+
+        const imageId = imagesLOL.current[index];
+        if (!imageId) return;
+
+        cornerstone.loadAndCacheImage(imageId).then(image => {
+            cornerstone.displayImage(element, image);
             setCurrentImageIndex(index);
-        } catch (error) {
-            console.error(`Error loading image at index ${index}:`, error);
-        }
+
+            // ✅ Apply annotation state if available
+            if (jsonobj && jsonobj[imageId]) {
+                const singleImageToolState = { [imageId]: jsonobj[imageId] };
+                cornerstoneTools.globalImageIdSpecificToolStateManager.restoreToolState(singleImageToolState);
+            }
+
+            // ✅ The correct and safest call for legacy cornerstone-tools
+            cornerstone.updateImage(element);
+        }).catch(err => {
+            console.error("❌ Error loading image:", err);
+            setErrorMessage("Failed to load image.");
+            setShowErrorPopup(true);
+        });
     };
 
-    // --- Annotation calculation and helper functions ---
-    // The internal logic of these functions remains the same.
-    const collectAllAnnotations = (imageIds: string[]): string => { /* ... Full function code from original file ... */ return JSON.stringify({}, null, 2); };
-    const getAnglePoints = (x1: number, y1: number, x2: number, y2: number, x3: number, y3: number): Point[] => { /* ... Full function code ... */ return []; };
-    const getPoints = (name: string, x1: number, y1: number, x2: number, y2: number): Point[] => { /* ... Full function code ... */ return []; };
+
+    // ✅ CORRECTED VERSION
+    const collectAllAnnotations = (imageIds: string[]): ImageAnnotations => {
+        // Get the entire tool state for all images at once
+        const toolState = cornerstoneTools.globalImageIdSpecificToolStateManager.saveToolState();
+        const relevantAnnotations: ImageAnnotations = {};
+
+        // Filter out only the imageIds we care about
+        imageIds.forEach(imageId => {
+            if (toolState && toolState[imageId]) {
+                relevantAnnotations[imageId] = toolState[imageId];
+            }
+        });
+
+        return relevantAnnotations;
+    };
+
+
     const calculateDistance = (x1: number, y1: number, x2: number, y2: number): number => Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
     const calculateAngle = (x1: number, y1: number, x2: number, y2: number, x3: number, y3: number): number => {
         const a = calculateDistance(x2, y2, x3, y3);
@@ -298,23 +320,124 @@ const Viewer: React.FC<ViewerProps> = () => {
         }
         return perimeter;
     };
+
+
+    // ✅ CORRECTED VERSION
     const saveAnnotations = async () => {
         try {
-            const rawAnnotations = collectAllAnnotations(imagesLOL.current);
-            const annotationsObj: ImageAnnotations = JSON.parse(rawAnnotations);
-            setJsonobj(annotationsObj);
+            // No more JSON.parse needed. We get the object directly.
+            const annotationsObj = collectAllAnnotations(imagesLOL.current);
+            setJsonobj(annotationsObj); // Keep this for your React state
+
+            const sessionId = params.sessionId;
+            const doctorName = "Dr. Devika";
+
+            const savePromises = Object.entries(annotationsObj).map(
+                async ([imageId, data]) => {
+                    const fileURL = imageId.replace(/^wadouri:/, "");
+                    return axios.post(`${serverURL}/api/annotation/save`, {
+                        sessionId,
+                        fileURL,
+                        doctorName,
+                        // The 'data' here is now in the exact format Cornerstone expects
+                        data
+                    });
+                }
+            );
+
+            await Promise.all(savePromises);
+
+            console.log("✅ Annotations saved to server in the correct format:", annotationsObj);
             setErrorMessage("Annotations saved!");
             setShowErrorPopup(true);
+
         } catch (error) {
-            console.error("Error in saveAnnotations:", error);
+            console.error("❌ Error in saveAnnotations:", error);
+            setErrorMessage("Failed to save annotations.");
+            setShowErrorPopup(true);
         } finally {
             setTimeout(() => setShowErrorPopup(false), 3000);
         }
     };
 
+    const loadAnnotations = async () => {
+        if (!sessionId) {
+            return;
+        }
+
+        try {
+            const response = await axios.get(`${serverURL}/api/annotation/${sessionId}`);
+
+            if (response.data.success && response.data.annotations.length > 0) {
+                const annotationsArray = response.data.annotations;
+                const restoredState: ImageAnnotations = {};
+
+                for (const entry of annotationsArray) {
+                    if (entry.fileURL && entry.data) {
+                        const imageId = `wadouri:${entry.fileURL}`;
+                        restoredState[imageId] = entry.data;
+                    }
+                }
+
+                // Update React state for the sidebar
+                setJsonobj(restoredState);
+                console.log("📥 Annotations fetched and structured:", restoredState);
+
+                // THIS IS THE FIX: Apply the fetched state to Cornerstone and force a redraw
+                applyAnnotationsToCornerstone(restoredState);
+
+            } else {
+                console.warn("⚠️ No annotations found for this session.");
+            }
+        } catch (error) {
+            console.error("❌ Error fetching annotations:", error);
+            setErrorMessage("Could not load annotations from the server.");
+            setShowErrorPopup(true);
+        }
+    };
+
+    const applyAnnotationsToCornerstone = (toolState: ImageAnnotations) => {
+        const element = viewerRef.current;
+        if (!element || !toolState || Object.keys(toolState).length === 0) {
+            return;
+        }
+
+        cornerstoneTools.globalImageIdSpecificToolStateManager.restoreToolState(toolState);
+
+        // ✅ Trigger re-render only if current image exists
+        const image = cornerstone.getImage(element);
+        if (image) {
+            cornerstone.displayImage(element, image); // Best way to trigger draw
+        }
+    };
+
+
+    const getPoints = (
+        name: string,
+        x1: number,
+        y1: number,
+        x2: number,
+        y2: number
+    ): Point[] => {
+        if (name === 'RectangleRoi' || name === 'EllipticalRoi') {
+            return [
+                { x: x1, y: y1 },
+                { x: x2, y: y1 },
+                { x: x2, y: y2 },
+                { x: x1, y: y2 }
+            ];
+        } else if (name === 'Length' || name === 'Probe') {
+            return [
+                { x: x1, y: y1 },
+                { x: x2, y: y2 }
+            ];
+        }
+        return [];
+    };
+
+
     const Next = () => { if (j + 1 < editedOnly.current.length) setJ(j + 1); };
     const Prev = () => { if (j - 1 >= 0) setJ(j - 1); };
-    const handleGoBack = () => router.back();
 
     const toggleTool = (toolName: string) => {
         // Deactivate the currently active tool first
@@ -449,34 +572,93 @@ const Viewer: React.FC<ViewerProps> = () => {
                     </div>
                 </div>
 
-                {annotationsEnabled && (
-                    <div className="lg:w-[25%] w-full h-[640px] bg-white rounded-2xl shadow-xl border border-gray-200 flex flex-col overflow-hidden transition-all duration-300">
-                        <div className="px-4 py-3 border-b border-gray-300 bg-gray-50">
-                            <h2 className="text-base font-semibold text-gray-700">Annotations</h2>
+                {
+                    annotationsEnabled && (
+                        <div className="lg:w-[25%] w-full h-[640px] bg-white rounded-2xl shadow-xl border border-gray-200 flex flex-col overflow-hidden transition-all duration-300">
+                            <div className="px-4 py-3 border-b border-gray-300 bg-gray-50">
+                                <h2 className="text-base font-semibold text-gray-700">Annotations</h2>
+                            </div>
+                            <div className="p-4 overflow-y-auto text-sm space-y-4 text-black">
+                                {jsonobj && imagesLOL.current[currentImageIndex] && jsonobj[imagesLOL.current[currentImageIndex]] ? (
+                                    // 'toolData' is an object like { data: [...] }
+                                    Object.entries(jsonobj[imagesLOL.current[currentImageIndex]]).map(([tool, toolData]) => (
+                                        <div key={tool}>
+                                            <h3 className="font-semibold text-gray-800 mb-1">{tool}</h3>
+                                            {/*
+                              ✅ THE FIX IS HERE: We now map over toolData.data, which is the actual array of annotations.
+                            */}
+                                            {(toolData.data as any[]).map((entry, idx) => {
+                                                let label = "";
+                                                let hasError = false;
+                                                const handles = entry.handles;
+
+                                                // The rest of the logic remains the same as it correctly reads from 'handles'
+                                                if (tool === "Length") {
+                                                    if (handles && handles.start && handles.end) {
+                                                        const dist = calculateDistance(handles.start.x, handles.start.y, handles.end.x, handles.end.y).toFixed(1);
+                                                        label = `Length: ${dist} px`;
+                                                    } else {
+                                                        hasError = true;
+                                                    }
+                                                } else if (tool === "Angle") {
+                                                    if (handles && handles.start && handles.middle && handles.end) {
+                                                        const angle = calculateAngle(handles.start.x, handles.start.y, handles.middle.x, handles.middle.y, handles.end.x, handles.end.y).toFixed(1);
+                                                        label = `Angle: ${angle}°`;
+                                                    } else {
+                                                        hasError = true;
+                                                    }
+                                                } else if (tool === "RectangleRoi" || tool === "EllipticalRoi") {
+                                                    // You can also use the pre-calculated stats!
+                                                    if (entry.cachedStats?.area && entry.cachedStats?.perimeter) {
+                                                        const area = entry.cachedStats.area.toFixed(1);
+                                                        const perimeter = entry.cachedStats.perimeter.toFixed(1);
+                                                        label = `Area: ${area} px², P: ${perimeter} px`;
+                                                    } else if (handles && handles.start && handles.end) {
+                                                        // Fallback calculation if stats don't exist
+                                                        const points = getPoints(tool, handles.start.x, handles.start.y, handles.end.x, handles.end.y);
+                                                        const area = calculatePolygonArea(points).toFixed(1);
+                                                        const perimeter = calculatePerimeter(points).toFixed(1);
+                                                        label = `Area: ${area} px², P: ${perimeter} px`;
+                                                    } else {
+                                                        hasError = true;
+                                                    }
+                                                } else if (tool === "FreehandRoi") {
+                                                    if (entry.cachedStats?.area && entry.cachedStats?.perimeter) {
+                                                        const area = entry.cachedStats.area.toFixed(1);
+                                                        const perimeter = entry.cachedStats.perimeter.toFixed(1);
+                                                        label = `Area: ${area} px², P: ${perimeter} px`;
+                                                    } else {
+                                                        hasError = true;
+                                                    }
+                                                } else if (tool === "Probe") {
+                                                    if (handles && handles.start) {
+                                                        label = `X: ${handles.start.x.toFixed(1)}, Y: ${handles.start.y.toFixed(1)}`;
+                                                    } else {
+                                                        hasError = true;
+                                                    }
+                                                } else {
+                                                    label = `Annotation ${idx + 1}`;
+                                                }
+
+                                                if (hasError) {
+                                                    label = `${tool}: ⚠️ Data Error`
+                                                }
+
+                                                return (
+                                                    <div key={idx} className={`ml-2 ${hasError ? "text-red-500" : "text-gray-600"}`}>
+                                                        - {label}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-gray-500 italic">No annotations for this image.</div>
+                                )}
+                            </div>
                         </div>
-                        <div className="p-4 overflow-y-auto text-sm space-y-4 text-black">
-                            {jsonobj && imagesLOL.current[currentImageIndex] && jsonobj[imagesLOL.current[currentImageIndex]] ? (
-                                Object.entries(jsonobj[imagesLOL.current[currentImageIndex]]).map(([tool, entries]) => (
-                                    <div key={tool}>
-                                        <h3 className="font-semibold text-gray-800 mb-1">{tool}</h3>
-                                        {(entries as any[]).map((entry, idx) => {
-                                            let label = "";
-                                            if (tool === "Length" && entry.x1 !== undefined) label = `Length: ${calculateDistance(entry.x1, entry.y1, entry.x2, entry.y2).toFixed(1)} px`;
-                                            else if (tool === "Angle" && entry.x1 !== undefined) label = `Angle: ${calculateAngle(entry.x1, entry.y1, entry.x2, entry.y2, entry.x3, entry.y3).toFixed(1)}°`;
-                                            else if (tool === "RectangleRoi" && entry.x1 !== undefined) label = `W×H: ${Math.abs(entry.x2 - entry.x1).toFixed(1)}×${Math.abs(entry.y2 - entry.y1).toFixed(1)} px`;
-                                            else if ((tool === "FreehandRoi" || tool === "EllipticalRoi") && Array.isArray(entry)) label = `Area: ${calculatePolygonArea(entry).toFixed(1)} px², P: ${calculatePerimeter(entry).toFixed(1)} px`;
-                                            else if (tool === "Probe" && entry.x !== undefined) label = `X: ${entry.x.toFixed(1)}, Y: ${entry.y.toFixed(1)}`;
-                                            else label = `Annotation ${idx + 1}`;
-                                            return <div key={idx} className="ml-2 text-gray-600">- {label}</div>;
-                                        })}
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-gray-500 italic">No annotations for this image.</div>
-                            )}
-                        </div>
-                    </div>
-                )}
+                    )
+                }
             </div>
 
 

@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3006",
+    "dev": "next dev -p 3005",
     "build": "next build",
-    "start": "next start -p 3006"
+    "start": "next start -p 3005"
   },
   "dependencies": {
+    "@cornerstonejs/core": "^3.26.0",
+    "@cornerstonejs/tools": "^3.26.0",
     "@material-tailwind/react": "^2.1.10",
     "axios": "^1.10.0",
     "cornerstone-core": "^2.6.1",

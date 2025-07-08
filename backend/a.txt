@@ -1,0 +1,120 @@
+use admin
+
+db.createUser({
+  user: "yanthra_labs",
+  pwd: "Digiclinics@dicomviewer25",
+  roles: [ { role: "root", db: "admin" } ]
+})
+
+
+
+
+
+
+
+{
+  "mrn": "MRN1234567",
+  "patientName": "John Doe",
+  "age": 45,
+  "gender": "Male",
+  "consultingDoctor": "Dr. Smith",
+  "symptoms": "Headache, dizziness",
+  "admissionDate": "2025-07-07T07:20:36.301Z",
+  "files": [
+    {
+      "fileName": "N2D_0001.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0001.dcm",
+      "remarks": "Slice 1"
+    },
+    {
+      "fileName": "N2D_0002.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0002.dcm",
+      "remarks": "Slice 2"
+    },
+    {
+      "fileName": "N2D_0003.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0003.dcm",
+      "remarks": "Slice 3"
+    },
+    {
+      "fileName": "N2D_0004.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0004.dcm",
+      "remarks": "Slice 4"
+    },
+    {
+      "fileName": "N2D_0005.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0005.dcm",
+      "remarks": "Slice 5"
+    },
+    {
+      "fileName": "N2D_0006.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0006.dcm",
+      "remarks": "Slice 6"
+    },
+    {
+      "fileName": "N2D_0007.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0007.dcm",
+      "remarks": "Slice 7"
+    },
+    {
+      "fileName": "N2D_0008.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0008.dcm",
+      "remarks": "Slice 8"
+    },
+     {
+      "fileName": "N2D_0006.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0009.dcm",
+      "remarks": "Slice 9"
+    },
+    {
+      "fileName": "N2D_0007.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0010.dcm",
+      "remarks": "Slice 10"
+    },
+    {
+      "fileName": "N2D_0008.dcm",
+      "fileType": ["dcm"],
+      "fileURL": "https://raw.githubusercontent.com/datalad/example-dicom-structural/master/dicoms/N2D_0011.dcm",
+      "remarks": "Slice 11"
+    }
+  ]
+}
+
+
+
+
+
+
+
+
+
+
+{
+  "mrn": "123456",
+  "patientName": "Abu Backer",
+  "age": 32,
+  "gender": "Male",
+  "consultingDoctor": "Madubala M",
+  "symptoms": "ache",
+  "admissionDate": "2025-07-07T07:45:43.081Z",
+  "files": [
+    {
+      "fileName": "CT Scan",
+      "fileType": [
+        "CT Scan"
+      ],
+      "fileURL": "https://yanthra-public-bucket.s3.amazonaws.com/MedicalRecords/files/1751439015749-eneeuen.dcm",
+      "remarks": "Samuel J"
+    }
+  ]
+}
