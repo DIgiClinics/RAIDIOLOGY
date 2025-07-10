@@ -1,27 +1,9 @@
-"use client";
-
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams } from "react-router-dom";
 import axios from "axios";
 import { ChevronLeft, ChevronRight, User } from "lucide-react";
 
-// Global type definitions
-declare global {
-    interface Window {
-        papaya?: any;
-        papayaContainers?: any[];
-    }
-}
-
-interface ProcessEnv {
-    NEXT_PUBLIC_DATA_SERVER: string;
-    NEXT_PUBLIC_FLASK_URL: string;
-    NEXT_PUBLIC_SERVER_URL: string;
-    NEXT_PUBLIC_SUPER_MICRO: string;
-}
-
-// A simple, reusable loader component
-const Loader: React.FC<{ text: string }> = ({ text }) => (
+const Loader = ({ text }) => (
     <div className="flex flex-col items-center justify-center h-full gap-4">
         <svg
             aria-hidden="true"
@@ -35,46 +17,32 @@ const Loader: React.FC<{ text: string }> = ({ text }) => (
     </div>
 );
 
+const MprViewer = () => {
+    const { sessionId } = useParams();
+    const SERVER_URL = import.meta.env.VITE_SERVER_URL;
+    const SUPER_MICRO = import.meta.env.VITE_SUPER_MICRO;
 
-const MprViewer: React.FC = () => {
-    const params = useParams();
-    const { sessionId } = params as { sessionId: string };
-    const serverURL = (process.env as unknown as ProcessEnv).NEXT_PUBLIC_SERVER_URL;
-
-    // State management
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isLoading, setIsLoading] = useState(true);
     const [isReady, setIsReady] = useState(false);
-    const [niftyName, setNiftyName] = useState<string | null>(null);
-    const [fileUrl, setFileUrl] = useState<string | null>(null);
-    const [subTestList, setSubTestList] = useState<string[]>([]);
-    const [selectedSubTest, setSelectedSubTest] = useState<string | null>(null);
-    const [conversionFailed, setConversionFailed] = useState<boolean>(false);
-    const [isPatientDataVisible, setIsPatientDataVisible] = useState<boolean>(true);
-    const [sessionMeta, setSessionMeta] = useState<{
-        mrn: string;
-        patientName: string;
-        age: number;
-        gender: string;
-        consultingDoctor: string;
-        symptoms: string;
-        admissionDate: string;
-    } | null>(null);
+    const [niftyName, setNiftyName] = useState(null);
+    const [fileUrl, setFileUrl] = useState(null);
+    const [subTestList, setSubTestList] = useState([]);
+    const [selectedSubTest, setSelectedSubTest] = useState(null);
+    const [conversionFailed, setConversionFailed] = useState(false);
+    const [isPatientDataVisible, setIsPatientDataVisible] = useState(true);
+    const [sessionMeta, setSessionMeta] = useState(null);
 
-    // Fetch initial metadata and subtest list
     useEffect(() => {
         if (!sessionId) return;
-
         const fetchMetadata = async () => {
             try {
-                const { data } = await axios.get(`${serverURL}/api/session/metadata/${sessionId}`);
+                const { data } = await axios.get(`${SERVER_URL}/api/session/metadata/${sessionId}`);
                 const niftyMap = data.niftyFileMap || {};
                 const subTests = Object.keys(niftyMap);
                 setSubTestList(subTests);
-
                 if (subTests.length > 0) {
                     setSelectedSubTest(subTests[0]);
                 }
-
                 setSessionMeta({
                     mrn: data.mrn,
                     patientName: data.patientName,
@@ -84,26 +52,21 @@ const MprViewer: React.FC = () => {
                     symptoms: data.symptoms,
                     admissionDate: data.admissionDate,
                 });
-
             } catch (err) {
-                console.error("Error fetching metadata:", err);
+                // console.error("Error fetching metadata:", err);
             } finally {
                 setIsLoading(false);
             }
         };
-
         fetchMetadata();
-    }, [sessionId, serverURL]);
+    }, [sessionId, SERVER_URL]);
 
-    // Fetch NIfTI file for the selected subtest
     useEffect(() => {
         if (!sessionId || !selectedSubTest) return;
-
         const fetchSelectedNifti = async () => {
             try {
-                const { data } = await axios.get(`${serverURL}/api/session/metadata/${sessionId}`);
+                const { data } = await axios.get(`${SERVER_URL}/api/session/metadata/${sessionId}`);
                 const fileList = data.niftyFileMap?.[selectedSubTest] || [];
-
                 if (fileList.length > 0) {
                     setNiftyName(fileList[0]);
                     setConversionFailed(false);
@@ -112,27 +75,23 @@ const MprViewer: React.FC = () => {
                     setConversionFailed(true);
                 }
             } catch (err) {
-                console.error("Error fetching subTest NIfTI file:", err);
+                // console.error("Error fetching subTest NIfTI file:", err);
                 setNiftyName(null);
                 setConversionFailed(true);
             }
         };
-
         fetchSelectedNifti();
-    }, [selectedSubTest, sessionId, serverURL]);
+    }, [selectedSubTest, sessionId, SERVER_URL]);
 
-    // Construct file URL
     useEffect(() => {
         if (!niftyName || !sessionId || !selectedSubTest) return;
-        setIsReady(false); // Reset readiness when file changes
-        const url = `${(process.env as unknown as ProcessEnv).NEXT_PUBLIC_SUPER_MICRO}/download/${sessionId}/${selectedSubTest}/${niftyName}`;
+        setIsReady(false);
+        const url = `${SUPER_MICRO}/download/${sessionId}/${selectedSubTest}/${niftyName}`;
         setFileUrl(url);
-    }, [niftyName, sessionId, selectedSubTest]);
+    }, [niftyName, sessionId, selectedSubTest, SUPER_MICRO]);
 
-    // Initialize Papaya viewer
     useEffect(() => {
         if (!fileUrl) return;
-
         const waitForPapaya = setInterval(() => {
             if (window.papaya?.Container?.startPapaya) {
                 clearInterval(waitForPapaya);
@@ -141,12 +100,10 @@ const MprViewer: React.FC = () => {
                 }
                 const div = document.querySelector(".papaya");
                 if (div) div.innerHTML = "";
-                
                 window.papaya.Container.startPapaya();
                 setTimeout(() => setIsReady(true), 1000);
             }
         }, 100);
-
         return () => {
             clearInterval(waitForPapaya);
             const div = document.querySelector(".papaya");
@@ -154,7 +111,6 @@ const MprViewer: React.FC = () => {
         };
     }, [fileUrl]);
 
-    // Initial full-page loader
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-900">
@@ -253,8 +209,8 @@ const MprViewer: React.FC = () => {
                                 style={{ visibility: isReady ? "visible" : "hidden" }}
                                 data-params={JSON.stringify({
                                     images: [fileUrl],
-                                    kioskMode: true,       // <-- REVERTED TO KIOSK MODE
-                                    expandable: false,     // <-- REVERTED TO NOT EXPANDABLE
+                                    kioskMode: true,
+                                    expandable: false,
                                     showControls: true
                                 })}
                             ></div>
@@ -268,4 +224,4 @@ const MprViewer: React.FC = () => {
     );
 };
 
-export default MprViewer;   
+export default MprViewer; 
